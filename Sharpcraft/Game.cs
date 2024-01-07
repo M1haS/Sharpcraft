@@ -112,6 +112,8 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
         int ebo;
         int textureID;
 
+        // Camera
+        Camera camera;
 
         // Transformation variables
         float yRot = 0f;
@@ -255,6 +257,9 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
             GL.BindTexture(TextureTarget.Texture2D, 0);
 
             GL.Enable(EnableCap.DepthTest);
+
+            camera = new Camera(width, height, Vector3.Zero);
+            CursorState = CursorState.Grabbed;
         }
 
         protected override void OnUnload()
@@ -271,8 +276,10 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
         // called every frame. All rendering happens here
         protected override void OnRenderFrame(FrameEventArgs args)
         {
+            base.OnRenderFrame(args);
+
             // Set the color to fill the screen with
-            GL.ClearColor(0.3f, 0.3f, 1f, 1f);
+            GL.ClearColor(0.3f, 0.3f, 0.3f, 1f);
             // Fill the screen with the color
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
@@ -286,10 +293,8 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
 
             // Rransformation matrices
             Matrix4 model = Matrix4.Identity;
-            Matrix4 view = Matrix4.Identity;
-            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(
-                MathHelper.DegreesToRadians(60.0f), width / height, 0.1f, 100.0f
-            );
+            Matrix4 view = camera.GetViewMatrix();
+            Matrix4 projection = camera.GetProjectionMatrix();
 
 
             model = Matrix4.CreateRotationY(yRot);
@@ -311,12 +316,14 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
 
             // Swap the buffers
             Context.SwapBuffers();
-
-            base.OnRenderFrame(args);
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
             base.OnUpdateFrame(args);
+
+            MouseState mouse = MouseState;
+            KeyboardState input = KeyboardState;
+            camera.Update(input, mouse, args);
         }
 
         public static string LoadShaderSource(string filePath)
