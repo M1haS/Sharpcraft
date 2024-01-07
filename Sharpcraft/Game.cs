@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using StbImageSharp;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
@@ -15,14 +16,35 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
     {
         private float[] Vertices =
         {
-             0f,     0.5f,  0f, // Top vertex
-            -0.5f,  -0.5f,  0f, // Bottom left
-             0.5f,  -0.5f,  0f  // Bottom right
+            -0.5f,   0.5f,  0f, // Top left     - 0
+             0.5f,   0.5f,  0f, // Top right    - 1
+             0.5f,  -0.5f,  0f, // Bottom left  - 2
+            -0.5f,  -0.5f,  0f  // Bottom right - 3
+        };
+
+        private float[] TexCoords =
+        {
+            0f, 1f,
+            1f, 1f,
+            1f, 0f,
+            1f, 0f
+        };
+
+        private uint[] Indices =
+        {
+            // Top triangles
+            0, 1, 2,
+            // Bottom trinagle
+            2, 3, 0
         };
 
         // Render pipelines
-        int vertexArraysObject;
+        int vao;
+        int vbo;
         int shaderProgram;
+        int ebo;
+        int textureVBO;
+        int textureID;
 
         // Constants
         private int Width, Height;
@@ -50,22 +72,56 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
         {
             base.OnLoad();
 
-            vertexArraysObject = GL.GenVertexArray();
-            int vertexBufferObject = GL.GenBuffer();
-            GL.BindBuffer(BufferTarget.ArrayBuffer, vertexBufferObject);
+            vao = GL.GenVertexArray();
+
+            // Bind the vao
+            GL.BindVertexArray(vao);
+
+            // -- Vertices VBO ---
+
+            vbo = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, vbo);
 
             GL.BufferData(
                 BufferTarget.ArrayBuffer, Vertices.Length*sizeof(float), 
                 Vertices, BufferUsageHint.StaticDraw
             );
 
-            // Bind the vertexArraysObject
-            GL.BindVertexArray(vertexArraysObject);
-            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 0, 0);
-            GL.EnableVertexArrayAttrib(vertexArraysObject, 0);
+            // Put the vertex VBO in slot 0
 
-            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);     // Unbind the vertexBufferObject
+            // Point slot (0) of the VAO to the currently bound VBO
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 0, 0);
+            GL.EnableVertexArrayAttrib(vao, 0);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+            // --- Texture VBO ---
+            textureVBO = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, textureVBO);
+            GL.BufferData(
+                BufferTarget.ArrayBuffer, TexCoords.Length * sizeof(float),
+                TexCoords, BufferUsageHint.StaticDraw
+            );
+
+            // Put the texture VBO in slot 1
+
+            // Point slot (1) of the VAO to the currently bound VBO
+            GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 0, 0);
+            GL.EnableVertexArrayAttrib(vao, 1);
+
+            GL.EnableVertexArrayAttrib(vao, 1);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);     // Unbind the vbo
             GL.BindVertexArray(0);
+
+
+            ebo = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, ebo);
+            GL.BufferData(
+                BufferTarget.ElementArrayBuffer, Indices.Length*sizeof(uint), 
+                Indices, BufferUsageHint.StaticDraw
+            );
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 
             // Creates the shader
             shaderProgram = GL.CreateProgram();
@@ -86,13 +142,54 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
             // Delete the shadrs
             GL.DeleteShader(vertexShader);
             GL.DeleteShader(fragmentShader);
+
+            // --- TEXTURES ---
+            textureID = GL.GenTexture();
+            // Active the texture in the unit
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, textureID);
+
+            // Texture parameters
+            GL.TexParameter(
+                TextureTarget.Texture2D, TextureParameterName.TextureWrapS,
+                (int)TextureWrapMode.Repeat
+            );
+            GL.TexParameter(
+                TextureTarget.Texture2D, TextureParameterName.TextureWrapT,
+                (int)TextureWrapMode.Repeat
+            );
+            GL.TexParameter(
+                TextureTarget.Texture2D, TextureParameterName.TextureMinFilter,
+                (int)TextureMinFilter.Nearest
+            );
+            GL.TexParameter(
+                TextureTarget.Texture2D, TextureParameterName.TextureMagFilter,
+                (int)TextureMinFilter.Nearest
+            );
+
+            // Load image
+            StbImage.stbi_set_flip_vertically_on_load(1);
+            ImageResult dirtTexture = ImageResult.FromStream(
+                File.OpenRead("../../../Textures/grassTex.png"), ColorComponents.RedGreenBlueAlpha
+            );
+            GL.TexImage2D(
+                TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba,
+                dirtTexture.Width, dirtTexture.Height, 0, PixelFormat.Rgba,
+                PixelType.UnsignedByte, dirtTexture.Data
+            );
+
+            // Unbind the texture
+            GL.BindTexture(TextureTarget.Texture2D, 0);
         }
 
         protected override void OnUnload()
         {
             base.OnUnload();
 
-            GL.DeleteVertexArray(vertexArraysObject);
+            GL.DeleteVertexArray(vao);
+            GL.DeleteBuffer(vbo);
+            GL.DeleteBuffer(ebo);
+            GL.DeleteTexture(textureID);
             GL.DeleteProgram(shaderProgram);
         }
 
@@ -103,10 +200,14 @@ namespace Sharpcraft_Mineecraft_Clone_OpenTK
             GL.ClearColor(0.2f, 0.2f, 0.2f, 1f);
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
-            // Draw our triangle 
+            // Draw
             GL.UseProgram(shaderProgram);
-            GL.BindVertexArray(vertexArraysObject);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
+
+            GL.BindTexture(TextureTarget.Texture2D, textureID);
+
+            GL.BindVertexArray(vao);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, ebo);
+            GL.DrawElements(PrimitiveType.Triangles, Indices.Length, DrawElementsType.UnsignedInt, 0);
 
             Context.SwapBuffers();
         }
